@@ -17,7 +17,7 @@
 
 const int MPU = 0x68; // MPU-6050 I2C address
 // float Accel_X, Accel_Y, Accel_Z;
-float Gyro_X, Gyro_Y, Gyro_Z;
+float Gyro_X, Gyro_Y, Gyro_Z, Accel_X, Accel_Y, Accel_Z;
 float roll, pitch, yaw, froll, fpitch, fyaw;
 
 float elapsedTime, currentTime = 0, previousTime;
@@ -53,6 +53,11 @@ void loop()
     Wire.write(GYRO_XOUTH);
     Wire.endTransmission(false);
     Wire.requestFrom(MPU, 6, true);
+
+    Accel_X = (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;   // Full-scale Range: 2g || LSB Sensity: Accel/16384 = g
+    Accel_Y = (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
+    Accel_Z = (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
+
     Gyro_X = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;      // Full-scale Range: 250 deg/s || LSB Sensity: Gyro/131 = deg/s
     Gyro_Y = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
     Gyro_Z = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
