@@ -18,6 +18,7 @@
 const int MPU = 0x68; // MPU-6050 I2C address
 // float Accel_X, Accel_Y, Accel_Z;
 float Gyro_X, Gyro_Y, Gyro_Z, Accel_X, Accel_Y, Accel_Z;
+float acc_X, acc_Y, acc_Z;
 float roll, pitch, yaw, froll, fpitch, fyaw;
 
 float elapsedTime, currentTime = 0, previousTime;
@@ -61,6 +62,10 @@ void loop()
     Gyro_X = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;      // Full-scale Range: 250 deg/s || LSB Sensity: Gyro/131 = deg/s
     Gyro_Y = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
     Gyro_Z = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
+
+    acc_X = Accel_X * 9.81; // Convert to m/s^2
+    acc_Y = Accel_Y * 9.81;
+    acc_Z = Accel_Z * 9.81;
 
     roll += (Gyro_X - froll) * dt;                          // Calculating the angle
     pitch += (Gyro_Y - fpitch) * dt;
