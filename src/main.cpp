@@ -16,16 +16,18 @@
 #define GYRO_ZOUTL 0x48
 
 const int MPU = 0x68; // MPU-6050 I2C address
-// float Accel_X, Accel_Y, Accel_Z;
-float Gyro_X, Gyro_Y, Gyro_Z, Accel_X, Accel_Y, Accel_Z;
+float Accel_X, Accel_Y, Accel_Z;
+float Gyro_X, Gyro_Y, Gyro_Z;
 float acc_X, acc_Y, acc_Z;
-float roll, pitch, yaw, froll, fpitch, fyaw;
+float roll, pitch, yaw;
+float offsetAX, offsetAY, offsetAZ;
+float offsetGX, offsetGY, offsetGZ;
 
 float elapsedTime, currentTime = 0, previousTime;
 float dt = 0.015; // 15 ms
 bool filter = false;
 
-void gyroFilter();
+void mpuCalibration();
 
 void setup()
 {
@@ -41,7 +43,7 @@ void loop()
 {
     if (filter == false)
     {
-        gyroFilter();
+        mpuCalibration();
         filter = true;
     }
 
@@ -51,61 +53,72 @@ void loop()
     dt = elapsedTime / 1000; // Convert milliseconds to seconds
 
     Wire.beginTransmission(MPU);
-    Wire.write(GYRO_XOUTH);
+    Wire.write(ACCEL_XOUTH);
     Wire.endTransmission(false);
-    Wire.requestFrom(MPU, 6, true);
+    Wire.requestFrom(MPU, 14, true);
 
     Accel_X = (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;   // Full-scale Range: 2g || LSB Sensity: Accel/16384 = g
     Accel_Y = (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
     Accel_Z = (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
 
+    Wire.read(); // Skip temperature data
+    Wire.read();
+
     Gyro_X = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;      // Full-scale Range: 250 deg/s || LSB Sensity: Gyro/131 = deg/s
     Gyro_Y = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
     Gyro_Z = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
 
-    acc_X = Accel_X * 9.81; // Convert to m/s^2
-    acc_Y = Accel_Y * 9.81;
-    acc_Z = Accel_Z * 9.81;
+    acc_X = (Accel_X - offsetAX) * 9.81; // Convert to m/s^2
+    acc_Y = (Accel_Y - offsetAY) * 9.81;
+    acc_Z = (Accel_Z - offsetAZ) * 9.81;
 
-    roll += (Gyro_X - froll) * dt;                          // Calculating the angle
-    pitch += (Gyro_Y - fpitch) * dt;
-    yaw += (Gyro_Z - fyaw) * dt;
-    Serial.print(">Roll: "); Serial.println(roll);
-    Serial.print(">Pitch: "); Serial.println(pitch);
-    Serial.print(">Yaw: "); Serial.println(yaw);                
+    roll += (Gyro_X - offsetGX) * dt;                          // Calculating the angle
+    pitch += (Gyro_Y - offsetGY) * dt;
+    yaw += (Gyro_Z - offsetGZ) * dt;
+
+    Serial.print(">Accel_X: "); Serial.println(acc_X);
+    Serial.print(">Accel_Y: "); Serial.println(acc_Y);
+    Serial.print(">Accel_Z: "); Serial.println(acc_Z);
+    
+    Serial.print("Roll: "); Serial.println(roll);
+    Serial.print("Pitch: "); Serial.println(pitch);
+    Serial.print("Yaw: "); Serial.println(yaw);             
 }
 
-void gyroFilter()
-{
-    Serial.println("Starting Gyro Filter...");
-    delay(500);
-    for (int i = 0; i < 10; i++)
-    {
-        Serial.print("*");
-        delay(100);
-    }
-    Serial.println("*");
+void mpuCalibration() {
+    float sumAX = 0, sumAY = 0, sumAZ = 0;
+    float sumGX = 0, sumGY = 0, sumGZ = 0;
+    int samples = 1000;
 
-    for (int x = 0; x < 1000; x++)
+    Serial.println("Calibrating...Please do not move the device!");
+
+    for (int i = 0; i < samples; i++)
     {
         Wire.beginTransmission(MPU);
-        Wire.write(GYRO_XOUTH);
+        Wire.write(0x3B);
         Wire.endTransmission(false);
-        Wire.requestFrom(MPU, 6, true);
-        Gyro_X = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
-        Gyro_Y = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
-        Gyro_Z = (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
+        Wire.requestFrom(MPU, 14, true);
 
-        froll += Gyro_X;                          // Simple low-pass filter
-        fpitch += Gyro_Y;
-        fyaw += Gyro_Z;
+        sumAX += (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
+        sumAY += (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
+        sumAZ += (int16_t)(Wire.read() << 8 | Wire.read()) / 16384.0;
+        
+        Wire.read(); Wire.read();
+
+        sumGX += (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
+        sumGY += (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
+        sumGZ += (int16_t)(Wire.read() << 8 | Wire.read()) / 131.0;
+        
+        if (i % 100 == 0) Serial.print("."); 
     }
 
-    froll /= 1000;
-    fpitch /= 1000;
-    fyaw /= 1000;
-    Serial.println("Gyro Filter Completed!");
-    Serial.print("froll: "); Serial.print(froll);
-    Serial.print(" | fpitch: "); Serial.print(fpitch);
-    Serial.print(" | fyaw: "); Serial.println(fyaw);
+    offsetAX = sumAX / samples;
+    offsetAY = sumAY / samples;
+    offsetAZ = (sumAZ / samples) - 1.0;
+
+    offsetGX = sumGX / samples;
+    offsetGY = sumGY / samples;
+    offsetGZ = sumGZ / samples;
+
+    Serial.println("\nCalibration completed!");
 }
